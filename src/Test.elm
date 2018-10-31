@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Test exposing (main)
 
 import Async exposing (Async)
 import Browser
