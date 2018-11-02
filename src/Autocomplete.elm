@@ -93,8 +93,7 @@ view : Model -> Html Msg
 view model =
     let
         result =
-            model.result
-                |> Async.takeLast
+            Async.takeLatest model.result
     in
     div []
         [ input
