@@ -1,5 +1,7 @@
-module Async exposing (Async, Id, empty, push, race, set, takeFirst, takeLast, takeLatest, waitPush)
+module Async exposing (Async, Id, empty, push, race, set, takeFirst, takeLast, takeLatest)
 
+import Task exposing (Task)
+import Process
 import Dict exposing (Dict)
 
 
@@ -12,102 +14,75 @@ type alias Async a =
 
 
 type alias State a =
-    { maybeCurrent : Maybe Int
-    , data : Dict Int a
-    , order : List Int
+    { pending : List Id
+    , received : List Id
+    , data : Dict Id a
     }
 
 
-set : Int -> a -> State a -> State a
+nextId : State a -> Id
+nextId state =
+    state.pending
+        |> List.reverse
+        |> List.head
+        |> Maybe.map (\id -> id + 1)
+        |> Maybe.withDefault 1
+
+
+set : Id -> a -> State a -> State a
 set id x state =
     { state
         | data = Dict.insert id x state.data
-        , order = state.order ++ [ id ]
+        , received = state.received ++ [ id ]
     }
 
 
-push : (Int -> msg) -> State a -> ( State a, msg )
-push msg state =
-    case state.maybeCurrent of
-        Just current ->
-            ( { state | maybeCurrent = Just (current + 1) }
-            , msg (current + 1)
-            )
-
-        Nothing ->
-            ( { state | maybeCurrent = Just 0 }
-            , msg 0
-            )
-
-
-waitPush : (Int -> msg) -> State a -> ( State a, Maybe msg )
-waitPush msg state =
+push : (Id -> Cmd msg) -> State a -> ( State a, Cmd msg)
+push toCmd state =
     let
-        currentData =
-            state.maybeCurrent
-                |> Maybe.map (\current -> Dict.get current state.data)
+        id =
+            nextId state
     in
-    case state.maybeCurrent of
-        Just current ->
-            case Dict.get current state.data of
-                Just _ ->
-                    push msg state
-                        |> Tuple.mapSecond Just
-
-                Nothing ->
-                    ( state, Nothing )
-
-        Nothing ->
-            push msg state
-                |> Tuple.mapSecond Just
+    ( { state | pending = state.pending ++ [ id ] }
+    , toCmd id
+    )
 
 
 takeFirst : State a -> Maybe a
-takeFirst { maybeCurrent, data } =
-    case maybeCurrent of
-        Just current ->
-            List.range 0 current
-                |> List.map (\id -> Dict.get id data)
-                |> List.foldr maybeOr Nothing
-
-        Nothing ->
-            Nothing
+takeFirst state =
+    state.received
+        |> List.head
+        |> Maybe.andThen (\id -> Dict.get id state.data)
 
 
 takeLatest : State a -> Maybe a
-takeLatest { maybeCurrent, data } =
-    case maybeCurrent of
-        Just current ->
-            List.range 0 current
-                |> List.map (\id -> Dict.get id data)
-                |> List.foldl maybeOr Nothing
-
-        Nothing ->
-            Nothing
-
-
-race : State a -> Maybe a
-race { data, order } =
-    order
-        |> List.map (\id -> Dict.get id data)
+takeLatest state =
+    state.pending
+        |> List.map (\id -> Dict.get id state.data)
         |> List.foldl maybeOr Nothing
 
 
-takeLast : State a -> Maybe a
-takeLast { maybeCurrent, data } =
-    case maybeCurrent of
-        Just current ->
-            Dict.get current data
+race : State a -> Maybe a
+race state  =
+    state.received
+        |> List.reverse
+        |> List.head
+        |> Maybe.andThen (\id -> Dict.get id state.data)
 
-        Nothing ->
-            Nothing
+
+takeLast : State a -> Maybe a
+takeLast state =
+    state.pending
+        |> List.reverse
+        |> List.head
+        |> Maybe.andThen (\id -> Dict.get id state.data)
 
 
 empty : State a
 empty =
-    { maybeCurrent = Nothing
+    { pending = []
+    , received = []
     , data = Dict.empty
-    , order = []
     }
 
 

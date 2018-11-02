@@ -1,5 +1,4 @@
 module Autocomplete exposing (main)
-
 import Async exposing (Async)
 import Browser
 import Html exposing (..)
@@ -19,6 +18,7 @@ type alias Model =
 type Msg
     = SearchChanged String
     | SearchResponse Async.Id (List String)
+    | DebouncedSearchChanged String
 
 
 type alias Flags =
@@ -45,23 +45,39 @@ init _ =
 
 -- Update
 
+-- mapResult stateFn cmdFn ( model, cmd ) =
+--     let
+--         ( state, msg ) = stateFn model.result
+--     in
+--     ( { model | result = state }
+--     , Cmd.batch [ cmd, newCmd ]
+--     )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        _ = Debug.log "msg" msg
+    in
     case msg of
         SearchChanged search ->
-            let
-                ( result, resMsg ) =
-                    Async.push SearchResponse model.result
-            in
-            ( { model | search = search, result = result }
-            , case search of
-                "" ->
-                    Cmd.none
+            ( model, Cmd.none )
+        --     let
+        --         ( state, cmd ) =
+        --             Async.debounce (DebouncedSearchChanged search) model.result
+        --     in
+        --     ( { model | search = search, result = state }, cmd )
 
-                _ ->
-                    Task.perform resMsg (searchCountry search)
+        DebouncedSearchChanged search ->
+            let
+                ( state, cmd ) =
+                    Async.push
+                        (\id -> Task.perform (SearchResponse id) (searchCountry search))
+                        model.result
+            in
+            ( { model | search = search, result = state }
+            , cmd
             )
+
 
         SearchResponse id items ->
             ( { model | result = Async.set id items model.result }
@@ -84,7 +100,7 @@ view model =
         [ input
             [ type_ "text"
             , value model.search
-            , onInput SearchChanged
+            , onInput DebouncedSearchChanged
             ]
             []
         , case result of
