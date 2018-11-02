@@ -1,7 +1,5 @@
-module Async exposing (Async, Id, empty, push, race, set, takeFirst, takeLast, takeLatest)
+module Async exposing (Async, Id, empty, push, race, set, raceFirst, takeLatest)
 
-import Task exposing (Task)
-import Process
 import Dict exposing (Dict)
 
 
@@ -48,18 +46,11 @@ push toCmd state =
     )
 
 
-takeFirst : State a -> Maybe a
-takeFirst state =
+raceFirst : State a -> Maybe a
+raceFirst state =
     state.received
         |> List.head
         |> Maybe.andThen (\id -> Dict.get id state.data)
-
-
-takeLatest : State a -> Maybe a
-takeLatest state =
-    state.pending
-        |> List.map (\id -> Dict.get id state.data)
-        |> List.foldl maybeOr Nothing
 
 
 race : State a -> Maybe a
@@ -70,8 +61,8 @@ race state  =
         |> Maybe.andThen (\id -> Dict.get id state.data)
 
 
-takeLast : State a -> Maybe a
-takeLast state =
+takeLatest : State a -> Maybe a
+takeLatest state =
     state.pending
         |> List.reverse
         |> List.head
