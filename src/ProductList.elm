@@ -8,11 +8,6 @@ import RemoteData exposing (..)
 import Theme exposing (Theme)
 import ViewEnv exposing (ViewEnv)
 
-
-type Msg
-    = LoadNew
-
-
 type alias Product p =
     { p | title : String }
 
@@ -28,7 +23,12 @@ init =
     FetchProduct "Old one"
 
 
-update : Msg -> Com msg
+
+type Msg
+    = LoadNew
+
+
+update : Msg -> OutMsg
 update msg =
     case msg of
         LoadNew ->

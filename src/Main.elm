@@ -1,28 +1,36 @@
 module Main exposing (main)
 
 import Browser
-import Com exposing (Com(..))
 import Html exposing (..)
-import Html.Events exposing (onClick)
 import Process
-import ProductList exposing (viewConfig)
-import RemoteData exposing (..)
+import ProductListPage
+import ProductViewPage
 import Task exposing (Task)
-import Theme exposing (Theme)
-import ViewEnv exposing (ViewEnv)
+import Dict exposing (Dict)
 
 
 type alias Product =
-    { title : String }
+    { id : Int
+    , name : String
+    }
 
 
 type alias Model =
-    RemoteData (List Product)
+    { pageState : PageState
+    , products : Dict Int Product
+    , cart : List Int
+    }
+
+
+type PageState
+    = ProductListPageState ProductListPage.State
+    | ProductViewPageState ProductViewPage.State
 
 
 type Msg
-    = FetchProductResult (Result Never Product)
-    | ProductList ProductList.Msg
+    = ProductListPageMsg ProductListPage.Msg
+    | ProductViewPageMsg ProductViewPage.Msg
+    | ReceviedProducts (List Int -> Msg) (List Product)
 
 
 type alias Flags =
@@ -39,105 +47,131 @@ main =
         }
 
 
-fetchProduct : String -> Task Never Product
-fetchProduct id =
+delay : a -> Task Never a
+delay x =
     Process.sleep 2000
-        |> Task.map (always { title = id })
+        |> Task.map (always x)
 
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    init_
-        |> toCmd
+    let
+        ( productListPageState, productListPageOutMsg ) =
+            ProductListPage.init
+    in
+    productListPageToUpdate
+        productListPageOutMsg
+        ( { pageState = ProductListPageState productListPageState
+          , products = Dict.empty
+          , cart = []
+          }
+        , Cmd.none
+        )
 
 
-init_ : ( Model, Com Msg )
-init_ =
-    ( NotAsked, ProductList.init )
-
-
-toCmd : ( Model, Com Msg ) -> ( Model, Cmd Msg )
-toCmd ( state, com ) =
-    case com of
-        EComCartAdd _ ->
-            ( state, Cmd.none )
-
-        FetchProduct name ->
-            ( Loading
-            , Task.attempt FetchProductResult (fetchProduct name)
+productListPageToUpdate : ProductListPage.OutMsg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+productListPageToUpdate outMsg ( model, cmd ) =
+    case outMsg of
+        ProductListPage.LoadProducts toMsg ->
+            ( model
+            , Cmd.batch
+                [ Task.perform
+                    (ReceviedProducts (toMsg >> ProductListPageMsg))
+                    (delay [{ id = 1, name = "Product 1" }])
+                , cmd
+                ]
             )
 
-        Batch xs ->
-            List.foldl
-                (\x ( state_, cmd_ ) -> toCmd ( state, x ) |> Tuple.mapSecond ((\y -> y :: [ cmd_ ]) >> Cmd.batch))
-                ( state, Cmd.none )
-                xs
+        ProductListPage.AddToCart id ->
+            -- send to store later
+            ( { model | cart = model.cart ++ [ id ] }
+            , cmd
+            )
 
-        None ->
-            ( state, Cmd.none )
+        ProductListPage.Noop ->
+            ( model, cmd )
 
 
+productViewPageToUpdate : ProductViewPage.OutMsg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+productViewPageToUpdate outMsg ( model, cmd ) =
+    case outMsg of
+        ProductViewPage.LoadProducts ids toMsg ->
+            ( model
+            , Cmd.batch
+                [ Task.perform
+                    (ReceviedProducts (toMsg >> ProductViewPageMsg))
+                    (delay (List.map (\id -> { id = id, name = "Product " ++ String.fromInt id }), ids))
+                , cmd
+                ]
+            )
 
--- Update
+        ProductViewPage.AddToCart id ->
+            -- send to store later
+            ( { model | cart = model.cart ++ [ id ] }
+            , cmd
+            )
+
+        ProductViewPage.Noop ->
+            ( model, cmd )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    update_ msg model
-        |> toCmd
-
-
-update_ : Msg -> Model -> ( Model, Com Msg )
-update_ msg model =
+    let
+        _ = Debug.log "update" msg
+    in
     case msg of
-        ProductList subMsg ->
-            ( model, ProductList.update subMsg )
+        ReceviedProducts toMsg products ->
+            let
+                newProducts =
+                    List.foldl
+                        (\product acc -> Dict.insert product.id product acc)
+                        model.products
+                        products
 
-        FetchProductResult result ->
-            case result of
-                Ok product ->
-                    case model of
-                        Success products ->
-                            ( Success (product :: products), Com.none )
+                productIds =
+                    List.map .id products
 
-                        _ ->
-                            ( Success [ product ], Com.none )
+                ( newModel, newCmd ) = update (toMsg productIds) model
+            in
+            ( { newModel | products = newProducts } , newCmd )
 
-                Err _ ->
-                    ( model, Com.none )
+        ProductListPageMsg subMsg ->
+            case model.pageState of
+                ProductListPageState state ->
+                    let
+                        ( newState, outMsg ) =
+                            ProductListPage.update subMsg state
+                    in
+                    productListPageToUpdate
+                        outMsg
+                        ( { model | pageState = ProductListPageState newState }
+                        , Cmd.none
+                        )
 
 
-
--- View
-
-
-theme : Theme {}
-theme =
-    { primaryColor = "blue" }
+getProducts : Dict Int Product -> List Int -> List Product
+getProducts products ids =
+    ids
+        |> List.map (\id -> Dict.get id products)
+        |> List.filterMap identity
 
 
 view : Model -> Html Msg
 view model =
-    ProductList.view
-        theme
-        { width = 900 }
-        model
-        |> Html.map ProductList
-
-
-viewCustom : Model -> Html Msg
-viewCustom model =
-    ProductList.viewAdvanced
-        theme
-        { viewConfig | viewCardItem = viewCardItemCustom }
-        { width = 900 }
-        model
-        |> Html.map ProductList
-
-
-viewCardItemCustom : Theme t -> ViewEnv v -> Product -> Html msg
-viewCardItemCustom _ env product =
-    div [] [ text ("Product name is '" ++ product.title ++ "'") ]
+    let
+        content =
+            case model.pageState of
+                ProductListPageState state ->
+                    ProductListPage.view
+                        { getProducts = (getProducts model.products) }
+                        state
+                        |> Html.map ProductListPageMsg
+    in
+        div []
+            [ text <| "Items in cart: " ++ String.fromInt (List.length model.cart)
+            , content
+            ]
 
 
 subscriptions : Model -> Sub Msg
