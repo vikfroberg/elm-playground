@@ -42,7 +42,7 @@ init _ =
     in
     ProductListPage.init
         |> Tuple.mapFirst (ProductListPageState >> toModel)
-        |> Tuple.applyl (Tuple.foldl productListPageUpdate)
+        |> Tuple.foldlSecond productListPageUpdate
         |> Tuple.mapSecond Cmd.batch
 
 
@@ -63,7 +63,7 @@ update msg model =
                 ProductListPageState state ->
                     ProductListPage.update subMsg state
                         |> Tuple.mapFirst (ProductListPageState >> setPageState model)
-                        |> Tuple.applyl (Tuple.foldl productListPageUpdate)
+                        |> Tuple.foldlSecond productListPageUpdate
                         |> Tuple.mapSecond Cmd.batch
 
                 _ ->
@@ -74,7 +74,7 @@ update msg model =
                 ProductViewPageState state ->
                     ProductViewPage.update subMsg state
                         |> Tuple.mapFirst (ProductViewPageState >> setPageState model)
-                        |> Tuple.applyl (Tuple.foldl productViewPageUpdate)
+                        |> Tuple.foldlSecond productViewPageUpdate
                         |> Tuple.mapSecond Cmd.batch
 
                 _ ->
@@ -105,7 +105,7 @@ productListPageUpdate outMsg model =
         ProductListPage.GoProduct id ->
             ProductViewPage.init id
                 |> Tuple.mapFirst (\s -> { model | pageState = ProductViewPageState s })
-                |> Tuple.applyl (Tuple.foldl productViewPageUpdate)
+                |> Tuple.foldlSecond productViewPageUpdate
                 |> Tuple.mapSecond Cmd.batch
 
         ProductListPage.LoadProducts toMsg ->
