@@ -1,6 +1,6 @@
-module ProductViewPage exposing (init, view, update, OutMsg(..), State, Msg)
+module ProductViewPage exposing (Msg, OutMsg(..), State, init, update, view)
 
-import Html exposing (h3, div, button, text, Html)
+import Html exposing (Html, button, div, h3, text)
 import Html.Events exposing (onClick)
 import RemoteData exposing (RemoteData(..))
 
@@ -12,11 +12,11 @@ type alias State =
 
 type Msg
     = PressedAddToCart Int
-    | ReceviedProduct (Maybe Int)
+    | ReceviedProduct Int
 
 
 type OutMsg
-    = LoadProducts (List Int) (List Int -> Msg)
+    = LoadProducts Int (Int -> Msg)
     | AddToCart Int
     | Noop
 
@@ -24,14 +24,14 @@ type OutMsg
 init : Int -> ( State, OutMsg )
 init id =
     ( { id = RemoteData.Loading }
-    , LoadProducts [ id ] (List.head >> ReceviedProduct)
+    , LoadProducts id ReceviedProduct
     )
 
 
 update : Msg -> State -> ( State, OutMsg )
 update msg state =
     case msg of
-        ReceviedProducts id ->
+        ReceviedProduct id ->
             ( { state | id = RemoteData.Success id }, Noop )
 
         PressedAddToCart id ->
@@ -39,7 +39,7 @@ update msg state =
 
 
 view :
-    { getProduct : (Int -> Product a) }
+    { getProduct : Int -> Product a }
     -> State
     -> Html Msg
 view { getProduct } model =
@@ -48,18 +48,18 @@ view { getProduct } model =
             model.id
                 |> RemoteData.map getProduct
     in
-        case remoteProduct of
-            Success product ->
-                div [] [ viewProduct product ]
+    case remoteProduct of
+        Success product ->
+            div [] [ viewProduct product ]
 
-            Failure err ->
-                div [] [ text "Error while loading product" ]
+        Failure err ->
+            div [] [ text "Error while loading product" ]
 
-            Loading ->
-                div [] [ text "Loading..." ]
+        Loading ->
+            div [] [ text "Loading..." ]
 
-            NotAsked ->
-                div [] [ text "Loading..." ]
+        NotAsked ->
+            div [] [ text "Loading..." ]
 
 
 type alias Product a =
