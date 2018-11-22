@@ -128,13 +128,18 @@ productViewPageUpdate : ProductViewPage.OutMsg -> Model -> ( Model, Cmd Msg )
 productViewPageUpdate outMsg model =
     case outMsg of
         ProductViewPage.LoadProduct id toMsg ->
-            ( model
-            , GraphQL.sendMock
-                (Repo.Insert (toMsg >> ProductViewPageMsg))
-                (GraphQLProduct.decoder "products")
-                (GraphQLProduct.encoder "products" GraphQLProduct.mock)
-                |> Cmd.map ProductRepoMsg
-            )
+            case Repo.get model.products id of
+                Just _ ->
+                    update (ProductViewPageMsg (toMsg (Ok id))) model
+
+                Nothing ->
+                    ( model
+                    , GraphQL.sendMock
+                        (Repo.Insert (toMsg >> ProductViewPageMsg))
+                        (GraphQLProduct.decoder "products")
+                        (GraphQLProduct.encoder "products" GraphQLProduct.mock)
+                        |> Cmd.map ProductRepoMsg
+                    )
 
         ProductViewPage.AddToCart id ->
             -- send to store later
