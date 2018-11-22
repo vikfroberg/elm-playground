@@ -42,7 +42,8 @@ init _ =
     in
     ProductListPage.init
         |> Tuple.mapFirst (ProductListPageState >> toModel)
-        |> Tuple.applyr productListPageUpdate
+        |> Tuple.applyl (Tuple.foldl productListPageUpdate)
+        |> Tuple.mapSecond Cmd.batch
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -62,7 +63,8 @@ update msg model =
                 ProductListPageState state ->
                     ProductListPage.update subMsg state
                         |> Tuple.mapFirst (ProductListPageState >> setPageState model)
-                        |> Tuple.applyr productListPageUpdate
+                        |> Tuple.applyl (Tuple.foldl productListPageUpdate)
+                        |> Tuple.mapSecond Cmd.batch
 
                 _ ->
                     ( model, Cmd.none )
@@ -72,7 +74,8 @@ update msg model =
                 ProductViewPageState state ->
                     ProductViewPage.update subMsg state
                         |> Tuple.mapFirst (ProductViewPageState >> setPageState model)
-                        |> Tuple.applyr productViewPageUpdate
+                        |> Tuple.applyl (Tuple.foldl productViewPageUpdate)
+                        |> Tuple.mapSecond Cmd.batch
 
                 _ ->
                     ( model, Cmd.none )
@@ -102,7 +105,8 @@ productListPageUpdate outMsg model =
         ProductListPage.GoProduct id ->
             ProductViewPage.init id
                 |> Tuple.mapFirst (\s -> { model | pageState = ProductViewPageState s })
-                |> Tuple.applyr productViewPageUpdate
+                |> Tuple.applyl (Tuple.foldl productViewPageUpdate)
+                |> Tuple.mapSecond Cmd.batch
 
         ProductListPage.LoadProducts toMsg ->
             ( model
@@ -117,9 +121,6 @@ productListPageUpdate outMsg model =
             ( { model | cart = model.cart ++ [ id ] }
             , Cmd.none
             )
-
-        ProductListPage.Noop ->
-            ( model, Cmd.none )
 
 
 productViewPageUpdate : ProductViewPage.OutMsg -> Model -> ( Model, Cmd Msg )
@@ -138,6 +139,3 @@ productViewPageUpdate outMsg model =
             ( { model | cart = model.cart ++ [ id ] }
             , Cmd.none
             )
-
-        ProductViewPage.Noop ->
-            ( model, Cmd.none )

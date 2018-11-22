@@ -2,8 +2,8 @@ module ProductViewPage exposing (Msg, OutMsg(..), State, init, update, view)
 
 import Html exposing (Html, button, div, h3, text)
 import Html.Events exposing (onClick)
-import RemoteData exposing (RemoteData(..))
 import Http
+import RemoteData exposing (RemoteData(..))
 
 
 type alias State =
@@ -19,28 +19,28 @@ type Msg
 type OutMsg
     = LoadProduct String (Result Http.Error String -> Msg)
     | AddToCart String
-    | Noop
 
 
-init : String -> ( State, OutMsg )
+init : String -> ( State, List OutMsg )
 init id =
     ( { id = RemoteData.Loading }
-    , LoadProduct id ReceviedProduct
+    , [ LoadProduct id ReceviedProduct ]
     )
 
 
-update : Msg -> State -> ( State, OutMsg )
+update : Msg -> State -> ( State, List OutMsg )
 update msg state =
     case msg of
         ReceviedProduct result ->
             case result of
                 Ok id ->
-                    ( { state | id = RemoteData.Success id }, Noop )
+                    ( { state | id = RemoteData.Success id }, [] )
+
                 Err err ->
-                    ( state, Noop )
+                    ( state, [] )
 
         PressedAddToCart id ->
-            ( state, AddToCart id )
+            ( state, [ AddToCart id ] )
 
 
 view :
