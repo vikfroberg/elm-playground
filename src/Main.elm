@@ -104,16 +104,17 @@ productListPageUpdate outMsg model =
     case outMsg of
         ProductListPage.GoProduct id ->
             ProductViewPage.init id
-                |> Tuple.mapFirst (\s -> { model | pageState = ProductViewPageState s })
+                |> Tuple.mapFirst (ProductViewPageState >> setPageState model)
                 |> Tuple.foldlSecond productViewPageUpdate
                 |> Tuple.mapSecond Cmd.batch
 
         ProductListPage.LoadProducts toMsg ->
             ( model
             , GraphQL.sendMock
-                (Repo.InsertMany (toMsg >> ProductListPageMsg) >> ProductRepoMsg)
+                (Repo.InsertMany (toMsg >> ProductListPageMsg))
                 (GraphQLProduct.decoderMany "products")
                 (GraphQLProduct.encoder "products" GraphQLProduct.mock)
+                |> Cmd.map ProductRepoMsg
             )
 
         ProductListPage.AddToCart id ->
@@ -129,9 +130,10 @@ productViewPageUpdate outMsg model =
         ProductViewPage.LoadProduct id toMsg ->
             ( model
             , GraphQL.sendMock
-                (Repo.Insert (toMsg >> ProductViewPageMsg) >> ProductRepoMsg)
+                (Repo.Insert (toMsg >> ProductViewPageMsg))
                 (GraphQLProduct.decoder "products")
                 (GraphQLProduct.encoder "products" GraphQLProduct.mock)
+                |> Cmd.map ProductRepoMsg
             )
 
         ProductViewPage.AddToCart id ->
