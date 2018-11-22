@@ -3,21 +3,24 @@ module ProductListPage exposing (init, view, update, OutMsg(..), State, Msg)
 import Html exposing (h3, div, button, text, Html)
 import Html.Events exposing (onClick)
 import RemoteData exposing (RemoteData(..))
+import Http
 
 
 type alias State =
-    { productIds : RemoteData String (List Int)
+    { productIds : RemoteData String (List String)
     }
 
 
 type Msg
-    = PressedAddToCart Int
-    | ReceviedProducts (List Int)
+    = PressedAddToCart String
+    | PressedTitle String
+    | ReceviedProducts (Result Http.Error (List String))
 
 
 type OutMsg
-    = LoadProducts (List Int -> Msg)
-    | AddToCart Int
+    = LoadProducts (Result Http.Error (List String) -> Msg)
+    | AddToCart String
+    | GoProduct String
     | Noop
 
 
@@ -31,14 +34,22 @@ init =
 update : Msg -> State -> ( State, OutMsg )
 update msg state =
     case msg of
-        ReceviedProducts ids ->
-            ( { state | productIds = RemoteData.Success ids }, Noop )
+        ReceviedProducts result ->
+            case result of
+                Ok ids ->
+                    ( { state | productIds = RemoteData.Success ids }, Noop )
+                Err err ->
+                    ( state, Noop )
+
         PressedAddToCart id ->
             ( state, AddToCart id )
 
+        PressedTitle id ->
+            ( state, GoProduct id )
+
 
 view :
-    { getProducts : (List Int -> List (Product a)) }
+    { getProducts : (List String -> List (Product a)) }
     -> State
     -> Html Msg
 view { getProducts } model =
@@ -66,7 +77,7 @@ view { getProducts } model =
 
 type alias Product a =
     { a
-        | id : Int
+        | id : String
         , name : String
     }
 
@@ -74,6 +85,6 @@ type alias Product a =
 viewProduct : Product a -> Html Msg
 viewProduct product =
     div []
-        [ h3 [] [ text product.name ]
+        [ h3 [ onClick (PressedTitle product.id) ] [ text product.name ]
         , button [ onClick (PressedAddToCart product.id) ] [ text "Add to cart" ]
         ]

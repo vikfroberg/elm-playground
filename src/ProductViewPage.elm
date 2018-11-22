@@ -3,43 +3,48 @@ module ProductViewPage exposing (Msg, OutMsg(..), State, init, update, view)
 import Html exposing (Html, button, div, h3, text)
 import Html.Events exposing (onClick)
 import RemoteData exposing (RemoteData(..))
+import Http
 
 
 type alias State =
-    { id : RemoteData String Int
+    { id : RemoteData String String
     }
 
 
 type Msg
-    = PressedAddToCart Int
-    | ReceviedProduct Int
+    = PressedAddToCart String
+    | ReceviedProduct (Result Http.Error String)
 
 
 type OutMsg
-    = LoadProducts Int (Int -> Msg)
-    | AddToCart Int
+    = LoadProduct String (Result Http.Error String -> Msg)
+    | AddToCart String
     | Noop
 
 
-init : Int -> ( State, OutMsg )
+init : String -> ( State, OutMsg )
 init id =
     ( { id = RemoteData.Loading }
-    , LoadProducts id ReceviedProduct
+    , LoadProduct id ReceviedProduct
     )
 
 
 update : Msg -> State -> ( State, OutMsg )
 update msg state =
     case msg of
-        ReceviedProduct id ->
-            ( { state | id = RemoteData.Success id }, Noop )
+        ReceviedProduct result ->
+            case result of
+                Ok id ->
+                    ( { state | id = RemoteData.Success id }, Noop )
+                Err err ->
+                    ( state, Noop )
 
         PressedAddToCart id ->
             ( state, AddToCart id )
 
 
 view :
-    { getProduct : Int -> Product a }
+    { getProduct : String -> Maybe (Product a) }
     -> State
     -> Html Msg
 view { getProduct } model =
@@ -49,8 +54,13 @@ view { getProduct } model =
                 |> RemoteData.map getProduct
     in
     case remoteProduct of
-        Success product ->
-            div [] [ viewProduct product ]
+        Success maybeProduct ->
+            case maybeProduct of
+                Just product ->
+                    div [] [ viewProduct product ]
+
+                Nothing ->
+                    div [] [ text "Error while loading product" ]
 
         Failure err ->
             div [] [ text "Error while loading product" ]
@@ -64,7 +74,7 @@ view { getProduct } model =
 
 type alias Product a =
     { a
-        | id : Int
+        | id : String
         , name : String
     }
 

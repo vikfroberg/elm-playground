@@ -4,42 +4,12 @@ import Browser
 import Dict exposing (Dict)
 import GraphQL
 import GraphQLProduct
-import Html exposing (..)
-import Http
-import Process
 import ProductListPage
 import ProductViewPage
-import Task exposing (Task)
-
-
-type alias Product =
-    { id : Int
-    , name : String
-    }
-
-
-type alias Model =
-    { pageState : PageState
-    , products : Dict Int Product
-    , cart : List Int
-    }
-
-
-type PageState
-    = ProductListPageState ProductListPage.State
-
-
-
--- | ProductViewPageState ProductViewPage.State
-
-
-type Msg
-    = ProductListPageMsg ProductListPage.Msg
-    | ReceviedProducts (List Int -> Msg) (Result Http.Error (List Product))
-
-
-
--- | ProductViewPageMsg ProductViewPage.Msg
+import Model exposing (..)
+import Msg exposing (..)
+import View exposing (..)
+import Repo exposing (Repo)
 
 
 type alias Flags =
@@ -65,7 +35,7 @@ init _ =
     productListPageToUpdate
         productListPageOutMsg
         ( { pageState = ProductListPageState productListPageState
-          , products = Dict.empty
+          , products = Repo.empty
           , cart = []
           }
         , Cmd.none
@@ -75,12 +45,23 @@ init _ =
 productListPageToUpdate : ProductListPage.OutMsg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 productListPageToUpdate outMsg ( model, cmd ) =
     case outMsg of
+        ProductListPage.GoProduct id ->
+            let
+                ( productViewPageState, productViewPageOutMsg ) =
+                    ProductViewPage.init id
+            in
+            productViewPageToUpdate
+                productViewPageOutMsg
+                ( { model | pageState = ProductViewPageState productViewPageState }
+                , Cmd.none
+                )
+
         ProductListPage.LoadProducts toMsg ->
             ( model
             , Cmd.batch
                 [ GraphQL.sendMock
-                    (ReceviedProducts (toMsg >> ProductListPageMsg))
-                    (GraphQLProduct.decoder "products")
+                    (Repo.InsertMany .id (toMsg >> ProductListPageMsg) >> ProductRepoMsg)
+                    (GraphQLProduct.decoderMany "products")
                     (GraphQLProduct.encoder "products" GraphQLProduct.mock)
                 , cmd
                 ]
@@ -96,55 +77,44 @@ productListPageToUpdate outMsg ( model, cmd ) =
             ( model, cmd )
 
 
+productViewPageToUpdate : ProductViewPage.OutMsg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+productViewPageToUpdate outMsg ( model, cmd ) =
+    case outMsg of
+        ProductViewPage.LoadProduct id toMsg ->
+            ( model
+            , Cmd.batch
+                [ GraphQL.sendMock
+                    (Repo.Insert .id (toMsg >> ProductViewPageMsg) >> ProductRepoMsg)
+                    (GraphQLProduct.decoder "products")
+                    (GraphQLProduct.encoder "products" GraphQLProduct.mock)
+                , cmd
+                ]
+            )
 
--- productViewPageToUpdate : ProductViewPage.OutMsg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
--- productViewPageToUpdate outMsg ( model, cmd ) =
---     case outMsg of
---         ProductViewPage.LoadProducts ids toMsg ->
---             ( model
---             , Cmd.batch
---                 [ Task.perform
---                     (ReceviedProducts (toMsg >> ProductViewPageMsg))
---                     (delay ( List.map (\id -> { id = id, name = "Product " ++ String.fromInt id }), ids ))
---                 , cmd
---                 ]
---             )
---         ProductViewPage.AddToCart id ->
---             -- send to store later
---             ( { model | cart = model.cart ++ [ id ] }
---             , cmd
---             )
---         ProductViewPage.Noop ->
---             ( model, cmd )
+        ProductViewPage.AddToCart id ->
+            -- send to store later
+            ( { model | cart = model.cart ++ [ id ] }
+            , cmd
+            )
+
+        ProductViewPage.Noop ->
+            ( model, cmd )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        _ =
-            Debug.log "update" msg
+        _ = Debug.log "msg" msg
     in
     case msg of
-        ReceviedProducts toMsg result ->
-            case result of
-                Ok products ->
+        ProductRepoMsg subMsg ->
                     let
-                        newProducts =
-                            List.foldl
-                                (\product acc -> Dict.insert product.id product acc)
-                                model.products
-                                products
-
-                        productIds =
-                            List.map .id products
-
-                        ( newModel, newCmd ) =
-                            update (toMsg productIds) model
+                        ( newRepo, newMsg ) =
+                            Repo.update subMsg model.products
                     in
-                    ( { newModel | products = newProducts }, newCmd )
-
-                Err e ->
-                    ( model, Cmd.none )
+                    update
+                        newMsg
+                        { model | products = newRepo }
 
         ProductListPageMsg subMsg ->
             case model.pageState of
@@ -158,30 +128,23 @@ update msg model =
                         ( { model | pageState = ProductListPageState newState }
                         , Cmd.none
                         )
+                _ ->
+                    ( model, Cmd.none )
 
-
-getProducts : Dict Int Product -> List Int -> List Product
-getProducts products ids =
-    ids
-        |> List.map (\id -> Dict.get id products)
-        |> List.filterMap identity
-
-
-view : Model -> Html Msg
-view model =
-    let
-        content =
+        ProductViewPageMsg subMsg ->
             case model.pageState of
-                ProductListPageState state ->
-                    ProductListPage.view
-                        { getProducts = getProducts model.products }
-                        state
-                        |> Html.map ProductListPageMsg
-    in
-    div []
-        [ text <| "Items in cart: " ++ String.fromInt (List.length model.cart)
-        , content
-        ]
+                ProductViewPageState state ->
+                    let
+                        ( newState, outMsg ) =
+                            ProductViewPage.update subMsg state
+                    in
+                    productViewPageToUpdate
+                        outMsg
+                        ( { model | pageState = ProductViewPageState newState }
+                        , Cmd.none
+                        )
+                _ ->
+                    ( model, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
