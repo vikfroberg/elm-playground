@@ -1,11 +1,11 @@
-module View exposing (..)
+module View exposing (view)
 
 import Dict exposing (Dict)
 import Html exposing (Html, div, text)
-import ProductListPage
-import ProductViewPage
 import Model exposing (..)
 import Msg exposing (..)
+import ProductListPage
+import ProductViewPage
 import Repo exposing (Repo)
 
 
@@ -16,13 +16,13 @@ view model =
             case model.pageState of
                 ProductListPageState state ->
                     ProductListPage.view
-                        { getProducts = Repo.get model.products }
+                        { getProducts = Repo.getMany model.products }
                         state
                         |> Html.map ProductListPageMsg
 
                 ProductViewPageState state ->
                     ProductViewPage.view
-                        { getProduct = List.singleton >> Repo.get model.products >> List.head }
+                        { getProduct = Repo.get model.products }
                         state
                         |> Html.map ProductViewPageMsg
     in
@@ -30,5 +30,3 @@ view model =
         [ text <| "Items in cart: " ++ String.fromInt (List.length model.cart)
         , content
         ]
-
-

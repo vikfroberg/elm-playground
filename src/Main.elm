@@ -4,12 +4,17 @@ import Browser
 import Dict exposing (Dict)
 import GraphQL
 import GraphQLProduct
-import ProductListPage
-import ProductViewPage
 import Model exposing (..)
 import Msg exposing (..)
-import View exposing (..)
+import ProductListPage
+import ProductViewPage
 import Repo exposing (Repo)
+import TupleExtra as Tuple
+import View exposing (..)
+
+
+
+-- TEA
 
 
 type alias Flags =
@@ -29,120 +34,46 @@ main =
 init : Flags -> ( Model, Cmd Msg )
 init _ =
     let
-        ( productListPageState, productListPageOutMsg ) =
-            ProductListPage.init
+        toModel pageState =
+            { products = Repo.empty .id
+            , cart = []
+            , pageState = pageState
+            }
     in
-    productListPageToUpdate
-        productListPageOutMsg
-        ( { pageState = ProductListPageState productListPageState
-          , products = Repo.empty
-          , cart = []
-          }
-        , Cmd.none
-        )
-
-
-productListPageToUpdate : ProductListPage.OutMsg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-productListPageToUpdate outMsg ( model, cmd ) =
-    case outMsg of
-        ProductListPage.GoProduct id ->
-            let
-                ( productViewPageState, productViewPageOutMsg ) =
-                    ProductViewPage.init id
-            in
-            productViewPageToUpdate
-                productViewPageOutMsg
-                ( { model | pageState = ProductViewPageState productViewPageState }
-                , Cmd.none
-                )
-
-        ProductListPage.LoadProducts toMsg ->
-            ( model
-            , Cmd.batch
-                [ GraphQL.sendMock
-                    (Repo.InsertMany .id (toMsg >> ProductListPageMsg) >> ProductRepoMsg)
-                    (GraphQLProduct.decoderMany "products")
-                    (GraphQLProduct.encoder "products" GraphQLProduct.mock)
-                , cmd
-                ]
-            )
-
-        ProductListPage.AddToCart id ->
-            -- send to store later
-            ( { model | cart = model.cart ++ [ id ] }
-            , cmd
-            )
-
-        ProductListPage.Noop ->
-            ( model, cmd )
-
-
-productViewPageToUpdate : ProductViewPage.OutMsg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-productViewPageToUpdate outMsg ( model, cmd ) =
-    case outMsg of
-        ProductViewPage.LoadProduct id toMsg ->
-            ( model
-            , Cmd.batch
-                [ GraphQL.sendMock
-                    (Repo.Insert .id (toMsg >> ProductViewPageMsg) >> ProductRepoMsg)
-                    (GraphQLProduct.decoder "products")
-                    (GraphQLProduct.encoder "products" GraphQLProduct.mock)
-                , cmd
-                ]
-            )
-
-        ProductViewPage.AddToCart id ->
-            -- send to store later
-            ( { model | cart = model.cart ++ [ id ] }
-            , cmd
-            )
-
-        ProductViewPage.Noop ->
-            ( model, cmd )
+    ProductListPage.init
+        |> Tuple.mapFirst (ProductListPageState >> toModel)
+        |> Tuple.applyr productListPageUpdate
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        _ = Debug.log "msg" msg
+        _ =
+            Debug.log "msg" msg
     in
     case msg of
         ProductRepoMsg subMsg ->
-                    let
-                        ( newRepo, newMsg ) =
-                            Repo.update subMsg model.products
-                    in
-                    update
-                        newMsg
-                        { model | products = newRepo }
+            Repo.update subMsg model.products
+                |> Tuple.mapFirst (\s -> { model | products = s })
+                |> Tuple.applyr update
 
         ProductListPageMsg subMsg ->
             case model.pageState of
                 ProductListPageState state ->
-                    let
-                        ( newState, outMsg ) =
-                            ProductListPage.update subMsg state
-                    in
-                    productListPageToUpdate
-                        outMsg
-                        ( { model | pageState = ProductListPageState newState }
-                        , Cmd.none
-                        )
+                    ProductListPage.update subMsg state
+                        |> Tuple.mapFirst (ProductListPageState >> setPageState model)
+                        |> Tuple.applyr productListPageUpdate
+
                 _ ->
                     ( model, Cmd.none )
 
         ProductViewPageMsg subMsg ->
             case model.pageState of
                 ProductViewPageState state ->
-                    let
-                        ( newState, outMsg ) =
-                            ProductViewPage.update subMsg state
-                    in
-                    productViewPageToUpdate
-                        outMsg
-                        ( { model | pageState = ProductViewPageState newState }
-                        , Cmd.none
-                        )
+                    ProductViewPage.update subMsg state
+                        |> Tuple.mapFirst (ProductViewPageState >> setPageState model)
+                        |> Tuple.applyr productViewPageUpdate
+
                 _ ->
                     ( model, Cmd.none )
 
@@ -150,3 +81,63 @@ update msg model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.none
+
+
+
+-- Helpers
+
+
+setPageState : Model -> PageState -> Model
+setPageState model pageState =
+    { model | pageState = pageState }
+
+
+
+-- DI
+
+
+productListPageUpdate : ProductListPage.OutMsg -> Model -> ( Model, Cmd Msg )
+productListPageUpdate outMsg model =
+    case outMsg of
+        ProductListPage.GoProduct id ->
+            ProductViewPage.init id
+                |> Tuple.mapFirst (\s -> { model | pageState = ProductViewPageState s })
+                |> Tuple.applyr productViewPageUpdate
+
+        ProductListPage.LoadProducts toMsg ->
+            ( model
+            , GraphQL.sendMock
+                (Repo.InsertMany (toMsg >> ProductListPageMsg) >> ProductRepoMsg)
+                (GraphQLProduct.decoderMany "products")
+                (GraphQLProduct.encoder "products" GraphQLProduct.mock)
+            )
+
+        ProductListPage.AddToCart id ->
+            -- send to store later
+            ( { model | cart = model.cart ++ [ id ] }
+            , Cmd.none
+            )
+
+        ProductListPage.Noop ->
+            ( model, Cmd.none )
+
+
+productViewPageUpdate : ProductViewPage.OutMsg -> Model -> ( Model, Cmd Msg )
+productViewPageUpdate outMsg model =
+    case outMsg of
+        ProductViewPage.LoadProduct id toMsg ->
+            ( model
+            , GraphQL.sendMock
+                (Repo.Insert (toMsg >> ProductViewPageMsg) >> ProductRepoMsg)
+                (GraphQLProduct.decoder "products")
+                (GraphQLProduct.encoder "products" GraphQLProduct.mock)
+            )
+
+        ProductViewPage.AddToCart id ->
+            -- send to store later
+            ( { model | cart = model.cart ++ [ id ] }
+            , Cmd.none
+            )
+
+        ProductViewPage.Noop ->
+            ( model, Cmd.none )
