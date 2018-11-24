@@ -1,4 +1,12 @@
-module GraphQLProduct exposing (decoder, decoderMany, encoder, getAllProductsQuery, getProductsQuery, mock)
+module GraphQLProduct exposing
+    ( Product
+    , decoderMany
+    , decoderOne
+    , getAllProductsMock
+    , getAllProductsQuery
+    , getProductsMock
+    , getProductsQuery
+    )
 
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
@@ -8,6 +16,13 @@ type alias Product =
     { id : String
     , name : String
     }
+
+
+getProductsMock : String -> List String -> Value
+getProductsMock name ids =
+    ids
+        |> List.map (\id -> { id = id, name = "Product " ++ id })
+        |> encoder name
 
 
 getProductsQuery : List String -> String -> String
@@ -25,6 +40,13 @@ getProductsQuery ids name =
     """
         |> String.replace "{{ids}}" stringIds
         |> String.replace "{{name}}" name
+
+
+getAllProductsMock : String -> Value
+getAllProductsMock name =
+    [ 1, 2, 3, 4, 5 ]
+        |> List.map String.fromInt
+        |> getProductsMock name
 
 
 getAllProductsQuery : String -> String
@@ -47,8 +69,8 @@ decoderMany name =
                 (Decode.field "name" Decode.string)
 
 
-decoder : String -> Decoder Product
-decoder name =
+decoderOne : String -> Decoder Product
+decoderOne name =
     Decode.field name <|
         Decode.index 0 <|
             Decode.map2 Product
@@ -69,12 +91,3 @@ productEncoder product =
         [ ( "id", Encode.string product.id )
         , ( "name", Encode.string product.name )
         ]
-
-
-mock : List Product
-mock =
-    [ { id = "1", name = "Product 1" }
-    , { id = "2", name = "Product 2" }
-    , { id = "3", name = "Product 3" }
-    , { id = "4", name = "Product 4" }
-    ]

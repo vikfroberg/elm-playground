@@ -26,7 +26,11 @@ main =
     Browser.element
         { init = init
         , view = view
-        , update = update
+        , update =
+            \msg model ->
+                ( msg, update msg model )
+                    |> Debug.log "Action"
+                    |> Tuple.second
         , subscriptions = subscriptions
         }
 
@@ -48,10 +52,6 @@ init _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        _ =
-            Debug.log "msg" msg
-    in
     case msg of
         ProductRepoMsg subMsg ->
             Repo.update subMsg model.products
@@ -101,6 +101,10 @@ setPageState model pageState =
 
 productListPageUpdate : ProductListPage.OutMsg -> Model -> ( Model, Cmd Msg )
 productListPageUpdate outMsg model =
+    let
+        _ =
+            Debug.log "ProductListPage.OutMsg" outMsg
+    in
     case outMsg of
         ProductListPage.GoProduct id ->
             ProductViewPage.init id
@@ -111,9 +115,9 @@ productListPageUpdate outMsg model =
         ProductListPage.LoadProducts toMsg ->
             ( model
             , GraphQL.sendMock
-                (Repo.insertMany (toMsg >> ProductListPageMsg) .id)
                 (GraphQLProduct.decoderMany "products")
-                (GraphQLProduct.encoder "products" GraphQLProduct.mock)
+                (GraphQLProduct.getAllProductsMock "products")
+                (Repo.insertMany .id (toMsg >> ProductListPageMsg))
                 |> Cmd.map ProductRepoMsg
             )
 
@@ -126,20 +130,43 @@ productListPageUpdate outMsg model =
 
 productViewPageUpdate : ProductViewPage.OutMsg -> Model -> ( Model, Cmd Msg )
 productViewPageUpdate outMsg model =
+    let
+        _ =
+            Debug.log "ProductViewPage.OutMsg" outMsg
+    in
     case outMsg of
         ProductViewPage.LoadProduct id toMsg ->
-            case Repo.getOne model.products id of
-                Just _ ->
-                    update (ProductViewPageMsg (toMsg (Ok id))) model
+            let
+                toCmd =
+                    GraphQL.sendMock
+                        (GraphQLProduct.decoderOne "products")
+                        (GraphQLProduct.getProductsMock "products" [ id ])
 
-                Nothing ->
-                    ( model
-                    , GraphQL.sendMock
-                        (Repo.insertOne (toMsg >> ProductViewPageMsg) .id)
-                        (GraphQLProduct.decoder "products")
-                        (GraphQLProduct.encoder "products" GraphQLProduct.mock)
-                        |> Cmd.map ProductRepoMsg
-                    )
+                config =
+                    { toId = .id
+                    , toMsg = toMsg >> ProductViewPageMsg
+                    , toCmd = toCmd
+                    }
+            in
+            ( model
+            , Repo.fetchOne
+                config
+                id
+                model.products
+                |> Cmd.map ProductRepoMsg
+            )
+
+        ProductViewPage.ReloadProduct id toMsg ->
+            let
+                toCmd =
+                    GraphQL.sendMock
+                        (GraphQLProduct.decoderOne "products")
+                        (GraphQLProduct.getProductsMock "products" [ id ])
+            in
+            ( model
+            , toCmd (Repo.insertOne .id (toMsg >> ProductViewPageMsg))
+                |> Cmd.map ProductRepoMsg
+            )
 
         ProductViewPage.AddToCart id ->
             -- send to store later

@@ -14,10 +14,12 @@ type alias State =
 type Msg
     = PressedAddToCart String
     | ReceviedProduct (Result Http.Error String)
+    | PressedReload String
 
 
 type OutMsg
     = LoadProduct String (Result Http.Error String -> Msg)
+    | ReloadProduct String (Result Http.Error String -> Msg)
     | AddToCart String
 
 
@@ -31,6 +33,11 @@ init id =
 update : Msg -> State -> ( State, List OutMsg )
 update msg state =
     case msg of
+        PressedReload id ->
+            ( { state | id = RemoteData.Loading }
+            , [ ReloadProduct id ReceviedProduct ]
+            )
+
         ReceviedProduct result ->
             case result of
                 Ok id ->
@@ -83,5 +90,6 @@ viewProduct : Product a -> Html Msg
 viewProduct product =
     div []
         [ h3 [] [ text product.name ]
+        , button [ onClick (PressedReload product.id) ] [ text "Reload" ]
         , button [ onClick (PressedAddToCart product.id) ] [ text "Add to cart" ]
         ]

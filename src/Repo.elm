@@ -1,7 +1,18 @@
-module Repo exposing (Msg, Repo, empty, getMany, getOne, insertMany, insertOne, update)
+module Repo exposing
+    ( Msg
+    , Repo
+    , empty
+    , fetchOne
+    , getMany
+    , getOne
+    , insertMany
+    , insertOne
+    , update
+    )
 
 import Dict exposing (Dict)
 import Http
+import Task
 
 
 type Repo a
@@ -10,10 +21,32 @@ type Repo a
 
 type Msg a msg
     = Merge msg (Result Http.Error (Dict String a))
+    | Noop msg
 
 
-insertOne : (Result Http.Error String -> msg) -> (a -> String) -> Result Http.Error a -> Msg a msg
-insertOne toMsg toId result =
+fetchOne :
+    { toId : a -> String
+    , toMsg : Result Http.Error String -> msg
+    , toCmd : (Result Http.Error a -> Msg a msg) -> Cmd (Msg a msg)
+    }
+    -> String
+    -> Repo a
+    -> Cmd (Msg a msg)
+fetchOne config id repo =
+    case getOne repo id of
+        Just a ->
+            config.toMsg (Ok id)
+                |> Noop
+                |> Task.succeed
+                |> Task.perform identity
+
+        Nothing ->
+            insertOne config.toId config.toMsg
+                |> config.toCmd
+
+
+insertOne : (a -> String) -> (Result Http.Error String -> msg) -> Result Http.Error a -> Msg a msg
+insertOne toId toMsg result =
     let
         toDict a =
             Dict.empty
@@ -24,8 +57,8 @@ insertOne toMsg toId result =
         (Result.map toDict result)
 
 
-insertMany : (Result Http.Error (List String) -> msg) -> (a -> String) -> Result Http.Error (List a) -> Msg a msg
-insertMany toMsg toId result =
+insertMany : (a -> String) -> (Result Http.Error (List String) -> msg) -> Result Http.Error (List a) -> Msg a msg
+insertMany toId toMsg result =
     let
         toDict =
             List.map (\a -> ( toId a, a )) >> Dict.fromList
@@ -41,6 +74,9 @@ insertMany toMsg toId result =
 update : Msg a msg -> Repo a -> ( Repo a, msg )
 update msg (Repo dict) =
     case msg of
+        Noop newMsg ->
+            ( Repo dict, newMsg )
+
         Merge newMsg result ->
             case result of
                 Ok newDict ->

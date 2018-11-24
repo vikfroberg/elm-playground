@@ -1,20 +1,15 @@
-module Model exposing (..)
+module Model exposing (Model, PageState(..))
 
 import Dict exposing (Dict)
+import GraphQLProduct
 import ProductListPage
 import ProductViewPage
 import Repo exposing (Repo)
 
 
-type alias Product =
-    { id : String
-    , name : String
-    }
-
-
 type alias Model =
     { pageState : PageState
-    , products : Repo Product
+    , products : Repo GraphQLProduct.Product
     , cart : List String
     }
 

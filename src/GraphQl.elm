@@ -13,8 +13,8 @@ send toMsg decoder query =
     Cmd.none
 
 
-sendMock : (Result Http.Error a -> msg) -> Decoder a -> Value -> Cmd msg
-sendMock toMsg decoder value =
+sendMock : Decoder a -> Value -> (Result Http.Error a -> msg) -> Cmd msg
+sendMock decoder value toMsg =
     let
         res =
             { url = ""
@@ -31,6 +31,6 @@ sendMock toMsg decoder value =
                 |> Result.mapError Decode.errorToString
                 |> Result.mapError (\s -> Http.BadPayload s res)
     in
-    Process.sleep 2000
+    Process.sleep 1000
         |> Task.map (always result)
         |> Task.perform toMsg
