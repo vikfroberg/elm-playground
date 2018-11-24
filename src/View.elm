@@ -14,6 +14,12 @@ view model =
     let
         content =
             case model.pageState of
+                LoadingPageState ->
+                    div [] []
+
+                NotFoundPageState ->
+                    div [] [ text "Not found" ]
+
                 ProductListPageState state ->
                     ProductListPage.view
                         { getProducts = Repo.getMany model.products }

@@ -1,9 +1,11 @@
 module ProductListPage exposing (Msg, OutMsg(..), State, init, update, view)
 
-import Html exposing (Html, button, div, h3, text)
+import Html exposing (Html, a, button, div, h3, text)
 import Html.Events exposing (onClick)
 import Http
 import RemoteData exposing (RemoteData(..))
+import Route
+import Router exposing (href)
 
 
 type alias State =
@@ -13,14 +15,12 @@ type alias State =
 
 type Msg
     = PressedAddToCart String
-    | PressedTitle String
     | ReceviedProducts (Result Http.Error (List String))
 
 
 type OutMsg
     = LoadProducts (Result Http.Error (List String) -> Msg)
     | AddToCart String
-    | GoProduct String
 
 
 init : ( State, List OutMsg )
@@ -43,9 +43,6 @@ update msg state =
 
         PressedAddToCart id ->
             ( state, [ AddToCart id ] )
-
-        PressedTitle id ->
-            ( state, [ GoProduct id ] )
 
 
 view :
@@ -86,6 +83,6 @@ type alias Product a =
 viewProduct : Product a -> Html Msg
 viewProduct product =
     div []
-        [ h3 [ onClick (PressedTitle product.id) ] [ text product.name ]
+        [ a [ href (Route.ProductView product.id) ] [ text product.name ]
         , button [ onClick (PressedAddToCart product.id) ] [ text "Add to cart" ]
         ]
