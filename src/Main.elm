@@ -35,7 +35,7 @@ init : Flags -> ( Model, Cmd Msg )
 init _ =
     let
         toModel pageState =
-            { products = Repo.empty .id
+            { products = Repo.empty
             , cart = []
             , pageState = pageState
             }
@@ -111,7 +111,7 @@ productListPageUpdate outMsg model =
         ProductListPage.LoadProducts toMsg ->
             ( model
             , GraphQL.sendMock
-                (Repo.InsertMany (toMsg >> ProductListPageMsg))
+                (Repo.insertMany (toMsg >> ProductListPageMsg) .id)
                 (GraphQLProduct.decoderMany "products")
                 (GraphQLProduct.encoder "products" GraphQLProduct.mock)
                 |> Cmd.map ProductRepoMsg
@@ -128,14 +128,14 @@ productViewPageUpdate : ProductViewPage.OutMsg -> Model -> ( Model, Cmd Msg )
 productViewPageUpdate outMsg model =
     case outMsg of
         ProductViewPage.LoadProduct id toMsg ->
-            case Repo.get model.products id of
+            case Repo.getOne model.products id of
                 Just _ ->
                     update (ProductViewPageMsg (toMsg (Ok id))) model
 
                 Nothing ->
                     ( model
                     , GraphQL.sendMock
-                        (Repo.Insert (toMsg >> ProductViewPageMsg))
+                        (Repo.insertOne (toMsg >> ProductViewPageMsg) .id)
                         (GraphQLProduct.decoder "products")
                         (GraphQLProduct.encoder "products" GraphQLProduct.mock)
                         |> Cmd.map ProductRepoMsg

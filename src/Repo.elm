@@ -1,63 +1,77 @@
-module Repo exposing (Msg(..), Repo, empty, get, getMany, update)
+module Repo exposing (Msg, Repo, empty, getMany, getOne, insertMany, insertOne, update)
 
 import Dict exposing (Dict)
 import Http
 
 
 type Repo a
-    = Repo (a -> String) (Dict String a)
+    = Repo (Dict String a)
 
 
 type Msg a msg
-    = InsertMany (Result Http.Error (List String) -> msg) (Result Http.Error (List a))
-    | Insert (Result Http.Error String -> msg) (Result Http.Error a)
+    = Merge msg (Result Http.Error (Dict String a))
+
+
+insertOne : (Result Http.Error String -> msg) -> (a -> String) -> Result Http.Error a -> Msg a msg
+insertOne toMsg toId result =
+    let
+        toDict a =
+            Dict.empty
+                |> Dict.insert (toId a) a
+    in
+    Merge
+        (toMsg (Result.map toId result))
+        (Result.map toDict result)
+
+
+insertMany : (Result Http.Error (List String) -> msg) -> (a -> String) -> Result Http.Error (List a) -> Msg a msg
+insertMany toMsg toId result =
+    let
+        toDict =
+            List.map (\a -> ( toId a, a )) >> Dict.fromList
+
+        toIds =
+            List.map toId
+    in
+    Merge
+        (toMsg (Result.map toIds result))
+        (Result.map toDict result)
 
 
 update : Msg a msg -> Repo a -> ( Repo a, msg )
-update msg (Repo getId dict) =
+update msg (Repo dict) =
     case msg of
-        InsertMany toMsg result ->
+        Merge newMsg result ->
             case result of
-                Ok xs ->
+                Ok newDict ->
                     let
-                        newDict =
-                            List.foldl
-                                (\x acc -> Dict.insert (getId x) x acc)
-                                dict
-                                xs
+                        mergedDict =
+                            Dict.union newDict dict
                     in
-                    ( Repo getId newDict, toMsg (Ok <| List.map getId xs) )
+                    ( Repo mergedDict, newMsg )
 
                 Err err ->
-                    ( Repo getId dict, toMsg (Err err) )
-
-        Insert toMsg result ->
-            case result of
-                Ok x ->
-                    let
-                        newDict =
-                            Dict.insert (getId x) x dict
-                    in
-                    ( Repo getId newDict, toMsg (Ok <| getId x) )
-
-                Err err ->
-                    ( Repo getId dict, toMsg (Err err) )
+                    ( Repo dict, newMsg )
 
 
-empty : (a -> String) -> Repo a
-empty getId =
-    Repo getId Dict.empty
+empty : Repo a
+empty =
+    Repo Dict.empty
 
 
 getMany : Repo a -> List String -> List a
-getMany (Repo getIds dict) ids =
+getMany (Repo dict) ids =
     ids
         |> List.map (\id -> Dict.get id dict)
         |> List.filterMap identity
 
 
-get : Repo a -> String -> Maybe a
-get repo id =
+getOne : Repo a -> String -> Maybe a
+getOne repo id =
     [ id ]
         |> getMany repo
         |> List.head
+
+
+
+-- Helpers

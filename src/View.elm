@@ -22,7 +22,7 @@ view model =
 
                 ProductViewPageState state ->
                     ProductViewPage.view
-                        { getProduct = Repo.get model.products }
+                        { getProduct = Repo.getOne model.products }
                         state
                         |> Html.map ProductViewPageMsg
     in
